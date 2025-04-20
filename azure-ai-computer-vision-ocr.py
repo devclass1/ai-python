@@ -57,3 +57,27 @@ if __name__ == "__main__":
         print(extracted_text)
     else:
         print("Failed to extract text")
+
+==================
+    1  apt-get update -y
+    2  mkdir application
+    3  cd application/
+    4  ls -l
+    5  pip install --upgrade azure-cognitiveservices-vision-computervision
+    6  apt install python3-pip
+    7  pip install --upgrade azure-cognitiveservices-vision-computervision
+    8  apt install python3-venv -y
+    9  python3 -m venv myenv
+   10  source myenv/bin/activate
+   11  pip install --upgrade pip
+   12  pip install --upgrade az
+   13  pip install --upgrade azure-cognitiveservices-vision-computervision
+   14  ls -lrt
+   15  touch ai-vision-ocr.py
+   16  vi ai-vision-ocr.py 
+   17  python ai-vision-ocr.py
+   18  pip install pillow
+   19  python ai-vision-ocr.py
+   20  vi ai-vision-ocr.py 
+   21  python ai-vision-ocr.py
+==============================
