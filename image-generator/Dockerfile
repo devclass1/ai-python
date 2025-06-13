@@ -4,27 +4,23 @@ FROM python:3.9-slim
 # Set the working directory in the container
 WORKDIR /app
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
-ENV FLASK_APP=app
-ENV FLASK_ENV=production
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    python3-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements file and install dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
 # Copy the current directory contents into the container
-COPY . .
+COPY . /app
 
-# Expose port 5000 for Flask
-EXPOSE 5000
+# Install all Python dependencies in a single RUN command to reduce image layers
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+    flask \
+    requests \
+    pillow \
+    azure-cognitiveservices-vision-computervision \
+    openai
 
-# Command to run the application
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+# Make port 80 available to the world outside this container
+EXPOSE 80
+
+# Define environment variable
+ENV FLASK_APP=app.py
+
+# Run app.py when the container launches
+CMD ["flask", "run", "--host=0.0.0.0", "--port=80"]
