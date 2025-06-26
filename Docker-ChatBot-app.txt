@@ -1,0 +1,48 @@
+############
+Dockerfile
+############
+# Use official Python image as base
+FROM python:3.9-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies (if needed for any Python packages)
+RUN apt-get update && apt-get install -y \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
+
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy the application code
+COPY . .
+
+# Environment variables (set these when running the container)
+ENV AZURE_OPENAI_ENDPOINT="your_endpoint_here"
+ENV AZURE_OPENAI_KEY="your_key_here"
+
+# Make the script executable (if needed)
+RUN chmod +x chatbot.py
+
+# Command to run the chatbot in console mode
+ENTRYPOINT ["python", "chatbot.py"]
+##################################################################################
+##################################################################################
+#requirements.txt
+###################################################################################
+openai
+python-dotenv
+#####################################################################################
+#Commands To Run
+#####################################################################################
+# Build the image
+docker build -t console-chatbot .
+
+# Run the container (passing required environment variables)
+docker run -it --rm \
+  -e AZURE_OPENAI_ENDPOINT="your_actual_endpoint" \
+  -e AZURE_OPENAI_KEY="your_actual_key" \
+  console-chatbot
