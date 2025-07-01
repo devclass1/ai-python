@@ -1,15 +1,14 @@
 import requests
 import os
 import tempfile
-from azure.ai.translation.text import TextTranslationClient
+from azure.ai.translation.text import TextTranslationClient, TranslatorCredential
 from azure.ai.translation.text.models import InputTextItem
 from azure.core.credentials import AzureKeyCredential
 
 class FileTranslator:
     def __init__(self, azure_key, azure_endpoint, azure_region):
-        self.azure_key = azure_key
-        self.azure_endpoint = azure_endpoint
-        self.azure_region = azure_region
+        self.credential = TranslatorCredential(azure_key, azure_region)
+        self.endpoint = azure_endpoint
         
     def download_file_from_url(self, url):
         """Download file from URL and return temporary file path"""
@@ -43,16 +42,17 @@ class FileTranslator:
     def translate_text(self, text, target_language):
         """Translate text using Azure AI Translator"""
         try:
-            credential = AzureKeyCredential(self.azure_key)
             client = TextTranslationClient(
-                endpoint=self.azure_endpoint,
-                credential=credential,
-                region=self.azure_region
+                endpoint=self.endpoint,
+                credential=self.credential
             )
             
-            input_text = [InputTextItem(text=text)]
+            # Prepare input text
+            input_text_elements = [InputTextItem(text=text)]
+            
+            # Call the translation API
             response = client.translate(
-                content=input_text,
+                content=input_text_elements,
                 to=[target_language]
             )
             
@@ -79,6 +79,14 @@ class FileTranslator:
         if translated_text:
             print("\nTranslated Text:")
             print(translated_text[:500] + "..." if len(translated_text) > 500 else translated_text)
+            
+            # Option to save to file
+            save = input("\nWould you like to save the translation? (y/n): ").lower()
+            if save == 'y':
+                output_file = input("Enter output file path: ")
+                with open(output_file, 'w', encoding='utf-8') as f:
+                    f.write(translated_text)
+                print(f"Translation saved to {output_file}")
         else:
             print("Translation failed")
 
@@ -93,14 +101,21 @@ def main():
     
     translator = FileTranslator(AZURE_KEY, AZURE_ENDPOINT, AZURE_REGION)
     
-    # Get input file path or URL
-    file_input = input("Enter file path or HTTPS URL: ").strip()
-    
-    # Get target language
-    target_lang = input("Enter target language code (e.g., 'fr', 'es', 'de'): ").strip().lower()
-    
-    # Translate
-    translator.translate_file(file_input, target_lang)
+    while True:
+        print("\nOptions:")
+        print("1. Translate a file")
+        print("2. Exit")
+        choice = input("Enter your choice (1/2): ")
+        
+        if choice == '2':
+            break
+            
+        if choice == '1':
+            file_input = input("\nEnter file path or HTTPS URL: ").strip()
+            target_lang = input("Enter target language code (e.g., 'fr', 'es', 'de'): ").strip().lower()
+            translator.translate_file(file_input, target_lang)
+        else:
+            print("Invalid choice. Please try again.")
 
 if __name__ == "__main__":
     main()
