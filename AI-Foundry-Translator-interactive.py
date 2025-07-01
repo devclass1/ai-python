@@ -1,84 +1,66 @@
 import requests
-from azure.ai.translation.text import TextTranslationClient, TranslatorCredential
-from azure.ai.translation.text.models import InputTextItem
-from azure.core.exceptions import HttpResponseError
+from googletrans import Translator
+import tempfile
+import os
 
-def download_text_file(url):
-    """Download text content from a URL"""
+def download_file_from_url(url):
+    """Download a file from a given URL and return its local path."""
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for HTTP errors
-        return response.text
+        response.raise_for_status()  # Raise an error for bad status codes
+        
+        # Create a temporary file to store the downloaded content
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as temp_file:
+            temp_file.write(response.content)
+            return temp_file.name
     except requests.RequestException as e:
         print(f"Error downloading file: {e}")
         return None
 
-def translate_text(text, target_language, azure_key, azure_endpoint, azure_region):
-    """Translate text using Azure AI Translator"""
+def translate_file(file_path, dest_language='en'):
+    """Translate the content of a file to the specified language."""
+    translator = Translator()
+    
     try:
-        # Create TextTranslationClient instance
-        credential = TranslatorCredential(azure_key, azure_region)
-        client = TextTranslationClient(endpoint=azure_endpoint, credential=credential)
-
-        # Prepare input text
-        input_text_elements = [InputTextItem(text=text)]
-
-        # Translate text
-        response = client.translate(
-            content=input_text_elements,
-            to=[target_language]
-        )
+        with open(file_path, 'r', encoding='utf-8') as file:
+            text = file.read()
         
-        # Extract and return translated text
-        if response and len(response) > 0 and len(response[0].translations) > 0:
-            return response[0].translations[0].text
-        return None
+        if not text.strip():
+            print("The file is empty.")
+            return
         
-    except HttpResponseError as e:
-        print(f"Azure Translation Error: {e}")
-        return None
+        translation = translator.translate(text, dest=dest_language)
+        print("Translated Text:")
+        print(translation.text)
+        
     except Exception as e:
         print(f"Error during translation: {e}")
-        return None
+    finally:
+        # Clean up the temporary file
+        if os.path.exists(file_path):
+            os.unlink(file_path)
 
 def main():
-    print("Text File Translator using Azure AI")
-    print("---------------------------------")
+    print("HTTPS File Translator")
+    print("---------------------")
     
-    # Get Azure credentials (in a real app, use environment variables or config file)
-    azure_key = input("Enter your Azure Translator Service key: ")
-    azure_endpoint = input("Enter your Azure Translator Service endpoint URL: ")
-    azure_region = input("Enter your Azure region (e.g., 'eastus'): ")
+    # Ask for the HTTPS URL of the file to translate
+    file_url = input("Enter the HTTPS URL of the file to translate: ").strip()
     
-    # Get user inputs
-    file_url = input("Enter the URL of the text file to translate: ")
-    target_language = input("Enter target language code (e.g., 'fr' for French, 'es' for Spanish): ")
+    if not file_url.lower().startswith(('http://', 'https://')):
+        print("Error: Please provide a valid HTTP/HTTPS URL.")
+        return
+    
+    # Ask for the target language
+    dest_language = input("Enter the target language code (e.g., 'en' for English, 'es' for Spanish): ").strip().lower()
     
     # Download the file
-    print("\nDownloading file...")
-    original_text = download_text_file(file_url)
+    print(f"Downloading file from {file_url}...")
+    local_file_path = download_file_from_url(file_url)
     
-    if original_text:
-        print(f"\nOriginal text ({len(original_text)} characters):\n")
-        print(original_text[:500] + "..." if len(original_text) > 500 else original_text)
-        
-        # Translate the text
-        print("\nTranslating...")
-        translated_text = translate_text(
-            original_text, 
-            target_language, 
-            azure_key, 
-            azure_endpoint, 
-            azure_region
-        )
-        
-        if translated_text:
-            print("\nTranslated text:\n")
-            print(translated_text[:500] + "..." if len(translated_text) > 500 else translated_text)
-        else:
-            print("Translation failed.")
-    else:
-        print("Failed to download or process the file.")
+    if local_file_path:
+        print("File downloaded successfully. Translating...")
+        translate_file(local_file_path, dest_language)
 
 if __name__ == "__main__":
     main()
