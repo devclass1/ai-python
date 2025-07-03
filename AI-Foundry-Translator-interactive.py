@@ -1,3 +1,7 @@
+# Install packages 
+# pip install azure-ai-translation-text==1.0.0b1
+
+
 import requests
 import os
 import tempfile
