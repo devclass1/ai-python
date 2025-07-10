@@ -1,7 +1,5 @@
 import requests
 import json
-import os
-from typing import Dict, Optional
 
 class AzureAIFoundryAssistant:
     def __init__(self, endpoint: str, api_key: str):
@@ -20,65 +18,71 @@ class AzureAIFoundryAssistant:
             "api-key": self.api_key
         })
         
-    def send_request(self, prompt: str, conversation_id: Optional[str] = None) -> Dict:
+    def send_request(self, prompt: str) -> Dict:
         """
         Send a request to the Azure AI Foundry endpoint.
         
         Args:
             prompt (str): The user's input prompt
-            conversation_id (str, optional): Conversation ID for multi-turn conversations
             
         Returns:
             dict: The JSON response from the API
         """
+        # Azure AI Foundry typically uses this structure
+        url = f"{self.endpoint}/api/v1/completion"
+        
         payload = {
-            "prompt": prompt,
+            "prompt": prompt,  # Note: Some services use "input" instead of "prompt"
             "max_tokens": 1000,
             "temperature": 0.7
         }
         
-        if conversation_id:
-            payload["conversation_id"] = conversation_id
-            
         try:
+            print(f"Sending request to: {url}")  # Debugging
+            print(f"Payload: {json.dumps(payload, indent=2)}")  # Debugging
+            
             response = self.session.post(
-                f"{self.endpoint}/v1/completions",
+                url,
                 json=payload,
                 timeout=30
             )
+            
+            print(f"Response status: {response.status_code}")  # Debugging
+            print(f"Response headers: {response.headers}")  # Debugging
+            
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
-            print(f"Error communicating with Azure AI Foundry: {e}")
+            print(f"Full error details: {str(e)}")
+            if hasattr(e, 'response') and e.response:
+                print(f"Response content: {e.response.text}")
             return {"error": str(e)}
     
     def process_response(self, response: Dict) -> str:
         """
         Process the API response and extract the assistant's reply.
-        
-        Args:
-            response (dict): The JSON response from the API
-            
-        Returns:
-            str: The assistant's reply text
         """
         if "error" in response:
             return f"Error: {response['error']}"
         
         try:
-            return response.get("choices", [{}])[0].get("text", "No response text found")
-        except (KeyError, IndexError) as e:
-            return f"Error processing response: {str(e)}"
+            # Try different response structures
+            if "choices" in response:
+                return response["choices"][0]["text"]
+            elif "output" in response:
+                return response["output"]
+            elif "completion" in response:
+                return response["completion"]
+            else:
+                return f"Unexpected response format: {json.dumps(response, indent=2)}"
+        except (KeyError, IndexError, TypeError) as e:
+            return f"Error processing response: {str(e)}\nFull response: {json.dumps(response, indent=2)}"
     
     def start_interactive_session(self):
-        """
-        Start an interactive session with the AI assistant.
-        """
+        """Start an interactive session with the AI assistant."""
         print("Azure AI Foundry Assistant - Interactive Session")
         print("Type 'quit' or 'exit' to end the session.")
         print("-----------------------------------------------")
-        
-        conversation_id = None
         
         while True:
             user_input = input("You: ").strip()
@@ -92,22 +96,13 @@ class AzureAIFoundryAssistant:
                 continue
                 
             print("Assistant is thinking...")
-            
-            # Send request to Azure AI Foundry
-            response = self.send_request(user_input, conversation_id)
-            
-            # Process the response
+            response = self.send_request(user_input)
             assistant_reply = self.process_response(response)
-            
-            # Update conversation ID if provided in response
-            conversation_id = response.get("conversation_id", conversation_id)
-            
-            print(f"Assistant: {assistant_reply}")
-            print()  # Add blank line for readability
+            print(f"Assistant: {assistant_reply}\n")
 
 
 def main():
-    # Configuration - replace with your actual endpoint and key
+    # Configuration
     ENDPOINT = "https://aemfoundry1007.cognitiveservices.azure.com/"
     API_KEY = "D4OysthTpxWVH4n3DZjuElGo7OqB9otIZj3C1XUs5FS65Vol8tYkJQQJ99BGACYeBjFXJ3w3AAAAACOGVdsI"
     
