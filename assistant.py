@@ -6,7 +6,7 @@ class AzureAIAssistant:
         # Initialize client with hardcoded values
         self.client = AzureOpenAI(
             azure_endpoint="https://aemfoundry1007.cognitiveservices.azure.com/",
-            api_key="D4OysthTpxWVH4n3DZjuElGo7OqB9otIZj3C1XUs5FS65Vol8tYkJQQJ99BGACYeBjFXJ3w3AAAAACOGVdsI",
+            api_key="D4xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxsI",
             api_version="2024-05-01-preview"
         )
         
