@@ -18,7 +18,7 @@ class AzureAIFoundryAssistant:
             "api-key": self.api_key
         })
         
-    def send_request(self, prompt: str) -> Dict:
+    def send_request(self, prompt: str) -> dict:
         """
         Send a request to the Azure AI Foundry endpoint.
         
@@ -58,7 +58,7 @@ class AzureAIFoundryAssistant:
                 print(f"Response content: {e.response.text}")
             return {"error": str(e)}
     
-    def process_response(self, response: Dict) -> str:
+    def process_response(self, response: dict) -> str:
         """
         Process the API response and extract the assistant's reply.
         """
