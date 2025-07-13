@@ -1,18 +1,13 @@
-#LLM Text Classification and Sentiment Analysis
 from openai import AzureOpenAI
 import json
 import time
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-import uvicorn
 
-# Static Azure OpenAI Configuration
+# Azure OpenAI Configuration - REPLACE THESE WITH YOUR ACTUAL VALUES
 AZURE_CONFIG = {
-    "api_key": "your-azure-openai-key-here",  # Replace with your actual key
+    "api_key": "your-azure-openai-key-here",
     "api_version": "2023-12-01-preview",
-    "azure_endpoint": "https://your-resource-name.openai.azure.com/",  # Replace with your endpoint
-    "deployment_name": "gpt-35-turbo"  # Replace with your deployment name
+    "azure_endpoint": "https://your-resource-name.openai.azure.com/",
+    "deployment_name": "gpt-35-turbo"
 }
 
 # Initialize Azure OpenAI client
@@ -21,39 +16,6 @@ client = AzureOpenAI(
     api_version=AZURE_CONFIG["api_version"],
     azure_endpoint=AZURE_CONFIG["azure_endpoint"]
 )
-
-# Initialize FastAPI app
-app = FastAPI(
-    title="Azure OpenAI Text Analysis API",
-    description="API for text classification and sentiment analysis using Azure OpenAI",
-    version="1.0.0"
-)
-
-# Configure CORS
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Pydantic models
-class TextInput(BaseModel):
-    text: str
-    categories: list[str] = None
-
-class BatchInput(BaseModel):
-    texts: list[str]
-    categories: list[str] = None
-
-class AnalysisResult(BaseModel):
-    text: str
-    classification: str
-    sentiment: dict
-
-class AnalysisResponse(BaseModel):
-    results: list[AnalysisResult]
 
 # Default categories
 DEFAULT_CATEGORIES = ["Feedback", "Complaint", "Inquiry", "Spam", "Other"]
@@ -76,7 +38,8 @@ def classify_text(text: str, categories: list[str] = DEFAULT_CATEGORIES) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        raise HTTPException(500, f"Classification error: {str(e)}")
+        print(f"⚠️ Classification error: {str(e)}")
+        return "Error"
 
 def analyze_sentiment(text: str) -> dict:
     """Analyze sentiment using Azure OpenAI"""
@@ -99,51 +62,94 @@ def analyze_sentiment(text: str) -> dict:
         )
         return json.loads(response.choices[0].message.content)
     except Exception as e:
-        raise HTTPException(500, f"Sentiment error: {str(e)}")
+        print(f"⚠️ Sentiment analysis error: {str(e)}")
+        return {"error": str(e)}
 
-@app.post("/analyze", response_model=AnalysisResult)
-async def analyze_text(text_input: TextInput):
-    """Analyze single text"""
-    try:
-        categories = text_input.categories or DEFAULT_CATEGORIES
-        return {
-            "text": text_input.text,
-            "classification": classify_text(text_input.text, categories),
-            "sentiment": analyze_sentiment(text_input.text)
-        }
-    except Exception as e:
-        raise HTTPException(500, str(e))
+def display_result(text: str, category: str, sentiment: dict):
+    """Display analysis results in a user-friendly format"""
+    print("\n📝 Analysis Results:")
+    print(f"Text: {text}")
+    print(f"🔖 Classification: {category}")
+    
+    print("\n😊 Sentiment Analysis:")
+    print(f"  - Mood: {sentiment.get('sentiment', 'N/A').title()}")
+    print(f"  - Confidence: {sentiment.get('confidence', 'N/A')}")
+    print(f"  - Key Phrases: {', '.join(sentiment.get('key_phrases', []))}")
+    print("-" * 50)
 
-@app.post("/analyze/batch", response_model=AnalysisResponse)
-async def analyze_batch(batch_input: BatchInput):
-    """Analyze multiple texts"""
-    try:
-        categories = batch_input.categories or DEFAULT_CATEGORIES
-        results = []
-        for text in batch_input.texts:
-            time.sleep(0.5)  # Rate limiting
-            results.append({
-                "text": text,
-                "classification": classify_text(text, categories),
-                "sentiment": analyze_sentiment(text)
-            })
-        return {"results": results}
-    except Exception as e:
-        raise HTTPException(500, str(e))
-
-@app.get("/categories")
-async def get_categories():
-    """Get default categories"""
-    return {"categories": DEFAULT_CATEGORIES}
-
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "model": AZURE_CONFIG["deployment_name"],
-        "api_version": AZURE_CONFIG["api_version"]
-    }
+def main():
+    print("""
+    🚀 Azure OpenAI Text Analysis Console
+    ------------------------------------
+    Commands:
+    - Enter text to analyze
+    - 'categories' - Show/modify categories
+    - 'batch' - Enter batch mode
+    - 'quit' - Exit the program
+    """)
+    
+    current_categories = DEFAULT_CATEGORIES.copy()
+    
+    while True:
+        user_input = input("\n📩 Enter text or command: ").strip()
+        
+        if user_input.lower() == 'quit':
+            print("👋 Goodbye!")
+            break
+            
+        elif user_input.lower() == 'categories':
+            print("\n📂 Current categories:")
+            for i, cat in enumerate(current_categories, 1):
+                print(f"{i}. {cat}")
+                
+            action = input("\n[A]dd, [R]emove, [C]lear, [K]eep? ").lower()
+            
+            if action == 'a':
+                new_cat = input("Enter new category name: ").strip()
+                if new_cat:
+                    current_categories.append(new_cat)
+                    print(f"✅ Added '{new_cat}'")
+                    
+            elif action == 'r':
+                try:
+                    remove_idx = int(input("Enter number to remove: ")) - 1
+                    if 0 <= remove_idx < len(current_categories):
+                        removed = current_categories.pop(remove_idx)
+                        print(f"✅ Removed '{removed}'")
+                except ValueError:
+                    print("⚠️ Please enter a valid number")
+                    
+            elif action == 'c':
+                current_categories.clear()
+                print("✅ Cleared all categories")
+                
+            continue
+            
+        elif user_input.lower() == 'batch':
+            print("\n📦 Batch Mode - Enter multiple texts (one per line). Enter 'done' when finished.")
+            texts = []
+            while True:
+                batch_input = input("> ").strip()
+                if batch_input.lower() == 'done':
+                    break
+                if batch_input:
+                    texts.append(batch_input)
+            
+            if texts:
+                print(f"\n🔍 Analyzing {len(texts)} texts...")
+                for i, text in enumerate(texts, 1):
+                    time.sleep(0.5)  # Rate limiting
+                    category = classify_text(text, current_categories)
+                    sentiment = analyze_sentiment(text)
+                    
+                    print(f"\n📄 Text {i}:")
+                    display_result(text, category, sentiment)
+            continue
+            
+        # Single text analysis
+        category = classify_text(user_input, current_categories)
+        sentiment = analyze_sentiment(user_input)
+        display_result(user_input, category, sentiment)
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    main()
