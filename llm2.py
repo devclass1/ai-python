@@ -1,160 +1,149 @@
 #LLM Text Classification and Sentiment Analysis
-import openai
-from dotenv import load_dotenv
-import os
+from openai import AzureOpenAI
 import json
 import time
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import uvicorn
 
-# Load environment variables
-load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Static Azure OpenAI Configuration
+AZURE_CONFIG = {
+    "api_key": "your-azure-openai-key-here",  # Replace with your actual key
+    "api_version": "2023-12-01-preview",
+    "azure_endpoint": "https://your-resource-name.openai.azure.com/",  # Replace with your endpoint
+    "deployment_name": "gpt-35-turbo"  # Replace with your deployment name
+}
 
-def classify_text(text, categories):
-    """
-    Classify text into predefined categories using LLM
-    
-    Args:
-        text (str): The text to classify
-        categories (list): List of possible categories
-    
-    Returns:
-        str: The classified category
-    """
-    prompt = f"""
-    Classify the following text into one of these categories: {', '.join(categories)}.
-    Return ONLY the category name, nothing else.
-    
-    Text: "{text}"
-    """
-    
+# Initialize Azure OpenAI client
+client = AzureOpenAI(
+    api_key=AZURE_CONFIG["api_key"],
+    api_version=AZURE_CONFIG["api_version"],
+    azure_endpoint=AZURE_CONFIG["azure_endpoint"]
+)
+
+# Initialize FastAPI app
+app = FastAPI(
+    title="Azure OpenAI Text Analysis API",
+    description="API for text classification and sentiment analysis using Azure OpenAI",
+    version="1.0.0"
+)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Pydantic models
+class TextInput(BaseModel):
+    text: str
+    categories: list[str] = None
+
+class BatchInput(BaseModel):
+    texts: list[str]
+    categories: list[str] = None
+
+class AnalysisResult(BaseModel):
+    text: str
+    classification: str
+    sentiment: dict
+
+class AnalysisResponse(BaseModel):
+    results: list[AnalysisResult]
+
+# Default categories
+DEFAULT_CATEGORIES = ["Feedback", "Complaint", "Inquiry", "Spam", "Other"]
+
+def classify_text(text: str, categories: list[str] = DEFAULT_CATEGORIES) -> str:
+    """Classify text using Azure OpenAI"""
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+        prompt = f"""
+        Classify the following text into one of these categories: {', '.join(categories)}.
+        Return ONLY the category name, nothing else.
+        
+        Text: "{text}"
+        """
+        
+        response = client.chat.completions.create(
+            model=AZURE_CONFIG["deployment_name"],
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.0
+            temperature=0.0,
+            max_tokens=20
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        print(f"Error in classification: {e}")
-        return "Error"
+        raise HTTPException(500, f"Classification error: {str(e)}")
 
-def analyze_sentiment(text):
-    """
-    Analyze sentiment of text using LLM
-    
-    Args:
-        text (str): The text to analyze
-    
-    Returns:
-        dict: Dictionary containing sentiment analysis results
-    """
-    prompt = f"""
-    Analyze the sentiment of the following text. 
-    Return a JSON object with these fields:
-    - sentiment: one of 'positive', 'negative', or 'neutral'
-    - confidence: your confidence score (0-1)
-    - key_phrases: list of phrases that influenced your decision
-    
-    Text: "{text}"
-    """
-    
+def analyze_sentiment(text: str) -> dict:
+    """Analyze sentiment using Azure OpenAI"""
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-3.5-turbo",
+        prompt = f"""
+        Analyze the sentiment of the following text. 
+        Return a JSON object with:
+        - sentiment: 'positive', 'negative', or 'neutral'
+        - confidence: score (0-1)
+        - key_phrases: list of influential phrases
+        
+        Text: "{text}"
+        """
+        
+        response = client.chat.completions.create(
+            model=AZURE_CONFIG["deployment_name"],
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.0
+            temperature=0.0,
+            response_format={"type": "json_object"}
         )
-        return json.loads(response.choices[0].message.content.strip())
-    except json.JSONDecodeError:
-        return {"error": "Failed to parse response"}
+        return json.loads(response.choices[0].message.content)
     except Exception as e:
-        print(f"Error in sentiment analysis: {e}")
-        return {"error": str(e)}
+        raise HTTPException(500, f"Sentiment error: {str(e)}")
 
-def batch_analyze(texts, categories):
-    """
-    Analyze multiple texts at once for efficiency
-    
-    Args:
-        texts (list): List of texts to analyze
-        categories (list): List of classification categories
-    
-    Returns:
-        list: List of analysis results for each text
-    """
-    results = []
-    for text in texts:
-        # Add delay to avoid rate limiting
-        time.sleep(0.5)
-        
-        analysis = {
-            "text": text,
-            "classification": classify_text(text, categories),
-            "sentiment": analyze_sentiment(text)
+@app.post("/analyze", response_model=AnalysisResult)
+async def analyze_text(text_input: TextInput):
+    """Analyze single text"""
+    try:
+        categories = text_input.categories or DEFAULT_CATEGORIES
+        return {
+            "text": text_input.text,
+            "classification": classify_text(text_input.text, categories),
+            "sentiment": analyze_sentiment(text_input.text)
         }
-        results.append(analysis)
-    return results
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
-def display_results(analysis):
-    """
-    Display analysis results in a readable format
-    
-    Args:
-        analysis (dict or list): Analysis results to display
-    """
-    if isinstance(analysis, list):
-        for i, result in enumerate(analysis, 1):
-            print(f"\nAnalysis #{i}:")
-            print(f"Text: {result['text']}")
-            print(f"Classification: {result['classification']}")
-            print("Sentiment Analysis:")
-            print(f"  - Sentiment: {result['sentiment'].get('sentiment', 'N/A')}")
-            print(f"  - Confidence: {result['sentiment'].get('confidence', 'N/A')}")
-            print(f"  - Key Phrases: {', '.join(result['sentiment'].get('key_phrases', []))}")
-    else:
-        print(f"\nText: {analysis['text']}")
-        print(f"Classification: {analysis['classification']}")
-        print("Sentiment Analysis:")
-        print(f"  - Sentiment: {analysis['sentiment'].get('sentiment', 'N/A')}")
-        print(f"  - Confidence: {analysis['sentiment'].get('confidence', 'N/A')}")
-        print(f"  - Key Phrases: {', '.join(analysis['sentiment'].get('key_phrases', []))}")
-    print()
+@app.post("/analyze/batch", response_model=AnalysisResponse)
+async def analyze_batch(batch_input: BatchInput):
+    """Analyze multiple texts"""
+    try:
+        categories = batch_input.categories or DEFAULT_CATEGORIES
+        results = []
+        for text in batch_input.texts:
+            time.sleep(0.5)  # Rate limiting
+            results.append({
+                "text": text,
+                "classification": classify_text(text, categories),
+                "sentiment": analyze_sentiment(text)
+            })
+        return {"results": results}
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
-def main():
-    print("LLM Text Classification and Sentiment Analysis Lab")
-    print("Enter 'quit' to exit or 'batch' to enter batch mode\n")
-    
-    # Example categories for classification
-    categories = ["Feedback", "Complaint", "Inquiry", "Spam", "Other"]
-    
-    while True:
-        user_input = input("Enter some text to analyze: ").strip()
-        
-        if user_input.lower() == 'quit':
-            break
-        elif user_input.lower() == 'batch':
-            print("\nBatch Mode - Enter multiple texts (one per line). Enter 'done' when finished.")
-            texts = []
-            while True:
-                batch_input = input("> ").strip()
-                if batch_input.lower() == 'done':
-                    break
-                if batch_input:
-                    texts.append(batch_input)
-            
-            if texts:
-                print("\nProcessing batch...")
-                results = batch_analyze(texts, categories)
-                display_results(results)
-            continue
-            
-        # Single text analysis
-        analysis = {
-            "text": user_input,
-            "classification": classify_text(user_input, categories),
-            "sentiment": analyze_sentiment(user_input)
-        }
-        display_results(analysis)
+@app.get("/categories")
+async def get_categories():
+    """Get default categories"""
+    return {"categories": DEFAULT_CATEGORIES}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "model": AZURE_CONFIG["deployment_name"],
+        "api_version": AZURE_CONFIG["api_version"]
+    }
 
 if __name__ == "__main__":
-    main()
+    uvicorn.run(app, host="0.0.0.0", port=8000)
